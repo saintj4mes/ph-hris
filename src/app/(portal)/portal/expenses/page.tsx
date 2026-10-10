@@ -1,0 +1,12 @@
+import { ReceiptText } from "lucide-react";
+import { Decimal } from "@/shared/lib/decimal";
+import { getMyExpenseDataAction } from "@/modules/expenses/actions/portal";
+import { ExpenseClaimForm } from "@/components/portal/expense-claim-form";
+import { StatusBadge } from "@/components/ui/status-badge";
+
+const peso = (value: { toFixed(places: number): string }) => `₱${value.toFixed(2)}`;
+export default async function ExpensesPage() {
+  const { claims, types } = await getMyExpenseDataAction();
+  const paid = claims.filter((claim) => claim.status === "PAID").reduce((total, claim) => total.plus(claim.approvedAmount ?? 0), new Decimal(0));
+  return <div className="space-y-6"><div><p className="text-xs font-semibold uppercase tracking-[0.15em] text-teal-700">Reimbursements</p><h1 className="mt-2 text-2xl font-semibold tracking-tight">Expense Claims</h1><p className="mt-1 text-sm text-slate-500">Submit and track work-related expenses.</p></div><div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]"><div className="space-y-5"><section className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><span className="grid size-10 place-items-center rounded-lg bg-teal-50 text-teal-700"><ReceiptText className="size-5" /></span><div><p className="text-xs text-slate-500">Reimbursed in listed claims</p><p className="mt-1 text-xl font-semibold">₱{paid.toFixed(2)}</p></div></section><section className="overflow-hidden rounded-xl border border-slate-200 bg-white"><div className="border-b border-slate-100 p-4"><h2 className="text-sm font-semibold">My claims</h2></div><div className="divide-y divide-slate-100">{claims.map((claim) => <article key={claim.id} className="flex items-start justify-between gap-3 p-4"><div><p className="text-sm font-semibold">{claim.purpose}</p><p className="mt-1 text-xs text-slate-500">{claim.claimDate.toISOString().slice(0,10)} · {claim.details.map((line) => line.expenseType.name).join(", ")}</p><p className="mt-1 text-xs text-slate-600">Claimed {peso(claim.totalAmount)}{claim.approvedAmount ? ` · Approved ${peso(claim.approvedAmount)}` : ""}</p></div><StatusBadge tone={claim.status === "PAID" ? "success" : claim.status === "REJECTED" ? "warning" : "info"}>{claim.status}</StatusBadge></article>)}{claims.length === 0 && <p className="p-6 text-sm text-slate-500">You have not submitted any claims.</p>}</div></section></div><ExpenseClaimForm types={types} /></div></div>;
+}

@@ -1,0 +1,247 @@
+enum SalaryComponentKind {
+  EARNING
+  DEDUCTION
+  EMPLOYER_CONTRIBUTION
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum PayrollPostingBehavior {
+  DEBIT
+  CREDIT
+  BOTH
+}
+
+model SalaryComponent {
+  id             String   @id @default(cuid())
+  companyId      String
+  code           String
+  name           String
+  kind           SalaryComponentKind
+  formula        String?
+  taxable        Boolean  @default(false)
+  is13thMonthOrDeMinimisBenefit Boolean @default(false)
+  recurring      Boolean  @default(true)
+  compensationClass String @default("REGULAR")
+  statutoryAgency StatutoryAgency?
+  active         Boolean  @default(true)
+  structures     SalaryStructureComponent[]
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, code])
+}
+
+model SalaryStructure {
+  id          String   @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  payFrequency String  @default("SEMI_MONTHLY")
+  active      Boolean  @default(true)
+  components  SalaryStructureComponent[]
+  assignments SalaryStructureAssignment[]
+  rateAssignments SalaryAssignment[]
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, code])
+}
+
+model SalaryStructureComponent {
+  id                 String   @id @default(cuid())
+  salaryStructureId  String
+  salaryComponentId  String
+  amount             Decimal? @db.Decimal(18, 4)
+  formulaOverride    String?
+  displayOrder       Int      @default(0)
+  salaryStructure    SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
+  salaryComponent    SalaryComponent @relation(fields: [salaryComponentId], references: [id], onDelete: Restrict)
+
+  @@unique([salaryStructureId, salaryComponentId])
+  @@index([salaryStructureId, displayOrder])
+}
+
+model SalaryStructureAssignment {
+  id                String   @id @default(cuid())
+  employeeId        String
+  salaryStructureId String
+  effectiveFrom     DateTime @db.Date
+  effectiveTo       DateTime? @db.Date
+  baseAmount        Decimal  @db.Decimal(18, 4)
+  status            String   @default("ACTIVE")
+  createdBy         String
+  createdAt         DateTime @default(now())
+  salaryStructure   SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Restrict)
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, effectiveFrom, effectiveTo])
+}
+
+model PayrollCorrection {
+  id               String   @id @default(cuid())
+  payrollRunId     String
+  employeeId       String
+  originalSlipId   String
+  replacementSlipId String?
+  reason           String
+  status           ApprovalStatus @default(DRAFT)
+  createdBy        String
+  createdAt        DateTime @default(now())
+  approvedAt       DateTime?
+
+  @@index([payrollRunId, employeeId])
+}
+
+model PayrollTaxYearInput {
+  id                         String   @id @default(cuid())
+  employeeId                 String
+  taxYear                    Int
+  source                     String   @default("CURRENT_EMPLOYER")
+  taxableCompensationToDate  Decimal  @default(0) @db.Decimal(18, 2)
+  taxWithheldToDate          Decimal  @default(0) @db.Decimal(18, 2)
+  nonTaxableBenefitAmountToDate Decimal @default(0) @db.Decimal(18, 2)
+  importedAt                 DateTime?
+  importedBy                 String?
+  sourceDocumentUrl          String?
+  employee                   Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, taxYear, source])
+}
+
+model JournalAccount {
+  id          String   @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  accountType String
+  active      Boolean  @default(true)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  lines       JournalLine[]
+  debitRules  PayrollPostingRule[] @relation("PayrollRuleDebit")
+  creditRules PayrollPostingRule[] @relation("PayrollRuleCredit")
+
+  @@unique([companyId, code])
+}
+
+model JournalEntry {
+  id             String       @id @default(cuid())
+  companyId      String
+  payrollRunId   String        @unique
+  postingDate    DateTime      @db.Date
+  reference      String
+  memo           String?
+  status         JournalStatus @default(DRAFT)
+  totalDebit     Decimal       @default(0) @db.Decimal(18, 2)
+  totalCredit    Decimal       @default(0) @db.Decimal(18, 2)
+  postedAt       DateTime?
+  reversedAt     DateTime?
+  createdBy      String
+  company        Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  payrollRun     PayrollRun    @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
+  lines          JournalLine[]
+
+  @@index([companyId, postingDate, status])
+}
+
+model JournalLine {
+  id             String         @id @default(cuid())
+  journalEntryId String
+  accountId      String
+  description    String
+  debit          Decimal        @default(0) @db.Decimal(18, 2)
+  credit         Decimal        @default(0) @db.Decimal(18, 2)
+  employeeId     String?
+  costCenter     String?
+  journalEntry   JournalEntry   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        JournalAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([journalEntryId])
+  @@index([accountId, employeeId])
+}
+
+model PayrollPostingRule {
+  id              String                 @id @default(cuid())
+  companyId       String
+  lineCode        String
+  behavior        PayrollPostingBehavior
+  debitAccountId  String?
+  creditAccountId String?
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  debitAccount    JournalAccount?        @relation("PayrollRuleDebit", fields: [debitAccountId], references: [id], onDelete: Restrict)
+  creditAccount   JournalAccount?        @relation("PayrollRuleCredit", fields: [creditAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, lineCode])
+}
+
+model LoanProduct {
+  id             String   @id @default(cuid())
+  companyId      String
+  code           String
+  name           String
+  interestRate   Decimal  @default(0) @db.Decimal(9, 6)
+  maximumAmount  Decimal? @db.Decimal(18, 2)
+  active         Boolean  @default(true)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  loans          EmployeeLoan[]
+
+  @@unique([companyId, code])
+}
+
+model EmployeeLoan {
+  id            String   @id @default(cuid())
+  employeeId    String
+  loanProductId String
+  requestedAmount Decimal @db.Decimal(18, 2)
+  approvedAmount Decimal? @db.Decimal(18, 2)
+  interestRate  Decimal @db.Decimal(9, 6)
+  installments  Int
+  status        EmployeeLoanStatus @default(DRAFT)
+  outstanding   Decimal @default(0) @db.Decimal(18, 2)
+  releasedAt    DateTime?
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  loanProduct   LoanProduct @relation(fields: [loanProductId], references: [id], onDelete: Restrict)
+  repayments    LoanRepayment[]
+
+  @@index([employeeId, status])
+}
+
+enum EmployeeLoanStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  RELEASED
+  CLOSED
+  CANCELLED
+}
+
+model LoanRepayment {
+  id          String   @id @default(cuid())
+  loanId      String
+  salarySlipId String?
+  dueDate     DateTime @db.Date
+  amount      Decimal  @db.Decimal(18, 2)
+  paidAmount  Decimal  @default(0) @db.Decimal(18, 2)
+  paidAt      DateTime?
+  loan        EmployeeLoan @relation(fields: [loanId], references: [id], onDelete: Restrict)
+
+  @@index([loanId, dueDate])
+}
+
+model EmployeeBenefit {
+  id            String   @id @default(cuid())
+  employeeId    String
+  benefitType   String
+  provider      String?
+  coverage      String?
+  amount        Decimal? @db.Decimal(18, 2)
+  taxable       Boolean  @default(false)
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, effectiveFrom, effectiveTo])
+}

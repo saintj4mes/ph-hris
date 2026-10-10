@@ -1,0 +1,208 @@
+enum LeaveApplicationStatus {
+  DRAFT
+  OPEN
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveLedgerEntryType {
+  ALLOCATION
+  ACCRUAL
+  APPLICATION
+  ADJUSTMENT
+  ENCASHMENT
+  EXPIRY
+}
+
+model LeaveType {
+  id                   String                  @id @default(cuid())
+  companyId            String
+  code                 String
+  name                 String
+  paid                 Boolean                 @default(true)
+  encashable           Boolean                 @default(false)
+  compensatory         Boolean                 @default(false)
+  includeHolidays      Boolean                 @default(false)
+  allowNegativeBalance Boolean                 @default(false)
+  requiresDocument     Boolean                 @default(false)
+  maximumConsecutiveDays Decimal?              @db.Decimal(8, 2)
+  active               Boolean                 @default(true)
+  company               Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  applications         LeaveApplication[]
+  allocations          LeaveAllocation[]
+  policies             LeavePolicyDetail[]
+  ledgerEntries        LeaveLedgerEntry[]
+  adjustments          LeaveAdjustment[]
+  encashments          LeaveEncashment[]
+  compensatoryRequests CompensatoryLeaveRequest[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+}
+
+model LeavePeriod {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  startsOn  DateTime @db.Date
+  endsOn    DateTime @db.Date
+  active    Boolean  @default(false)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  allocations LeaveAllocation[]
+
+  @@unique([companyId, name])
+  @@index([companyId, startsOn, endsOn])
+}
+
+model LeavePolicy {
+  id          String             @id @default(cuid())
+  companyId   String
+  name        String
+  effectiveFrom DateTime         @db.Date
+  effectiveTo DateTime?          @db.Date
+  active      Boolean            @default(true)
+  company     Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  details     LeavePolicyDetail[]
+  employeeAssignments EmployeeLeavePolicyAssignment[]
+
+  @@unique([companyId, name, effectiveFrom])
+}
+
+model EmployeeLeavePolicyAssignment {
+  id             String     @id @default(cuid())
+  employeeId     String
+  leavePolicyId  String
+  effectiveFrom  DateTime   @db.Date
+  effectiveTo    DateTime?  @db.Date
+  status         String     @default("ACTIVE")
+  createdBy      String
+  createdAt      DateTime   @default(now())
+  employee       Employee   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leavePolicy    LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, leavePolicyId, effectiveFrom])
+  @@index([employeeId, effectiveFrom, effectiveTo, status])
+}
+
+model LeavePolicyDetail {
+  id                    String    @id @default(cuid())
+  leavePolicyId         String
+  leaveTypeId           String
+  annualEntitlement     Decimal   @db.Decimal(8, 2)
+  accrualFrequency      String    @default("ANNUAL")
+  carryForwardLimit     Decimal?  @db.Decimal(8, 2)
+  expiresAfterMonths    Int?
+  leavePolicy           LeavePolicy @relation(fields: [leavePolicyId], references: [id], onDelete: Cascade)
+  leaveType             LeaveType   @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([leavePolicyId, leaveTypeId])
+}
+
+model LeaveAllocation {
+  id            String   @id @default(cuid())
+  employeeId    String
+  leaveTypeId   String
+  leavePeriodId String
+  allocatedDays Decimal  @db.Decimal(8, 2)
+  carryForwardDays Decimal @default(0) @db.Decimal(8, 2)
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leavePeriod   LeavePeriod @relation(fields: [leavePeriodId], references: [id], onDelete: Restrict)
+  ledgerEntries LeaveLedgerEntry[]
+
+  @@unique([employeeId, leaveTypeId, leavePeriodId])
+  @@index([employeeId, leavePeriodId])
+}
+
+model LeaveApplication {
+  id           String                 @id @default(cuid())
+  employeeId   String
+  leaveTypeId  String
+  fromDate     DateTime               @db.Date
+  toDate       DateTime               @db.Date
+  totalDays    Decimal                @db.Decimal(8, 2)
+  halfDay      Boolean                @default(false)
+  reason       String
+  attachmentUrl String?
+  status       LeaveApplicationStatus @default(DRAFT)
+  submittedAt  DateTime?
+  reviewedAt   DateTime?
+  reviewerId   String?
+  reviewComment String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  leaveType    LeaveType              @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  employee     Employee               @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  ledgerEntries LeaveLedgerEntry[]
+
+  @@index([employeeId, fromDate, toDate])
+  @@index([status, submittedAt])
+}
+
+model LeaveLedgerEntry {
+  id                 String               @id @default(cuid())
+  employeeId         String
+  leaveTypeId        String
+  allocationId       String?
+  applicationId      String?
+  entryType          LeaveLedgerEntryType
+  postingDate        DateTime             @db.Date
+  days               Decimal              @db.Decimal(8, 2)
+  balanceAfter       Decimal              @db.Decimal(8, 2)
+  description        String
+  sourceKey          String?              @unique
+  createdBy          String?
+  createdAt          DateTime             @default(now())
+  leaveType          LeaveType            @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  employee           Employee             @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  allocation         LeaveAllocation?     @relation(fields: [allocationId], references: [id], onDelete: Restrict)
+  application        LeaveApplication?    @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, leaveTypeId, postingDate])
+}
+
+model LeaveAdjustment {
+  id          String   @id @default(cuid())
+  employeeId  String
+  leaveTypeId String
+  postingDate DateTime @db.Date
+  days        Decimal  @db.Decimal(8, 2)
+  reason      String
+  createdBy   String
+  createdAt   DateTime @default(now())
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+}
+
+model LeaveEncashment {
+  id          String   @id @default(cuid())
+  employeeId  String
+  leaveTypeId String
+  days        Decimal  @db.Decimal(8, 2)
+  amount      Decimal  @db.Decimal(18, 2)
+  status      ApprovalStatus @default(DRAFT)
+  createdAt   DateTime @default(now())
+  paidAt      DateTime?
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+}
+
+model CompensatoryLeaveRequest {
+  id             String   @id @default(cuid())
+  employeeId     String
+  leaveTypeId    String
+  workDate       DateTime @db.Date
+  hoursWorked    Decimal  @db.Decimal(8, 2)
+  leaveDaysEarned Decimal @db.Decimal(8, 2)
+  reason         String
+  status         ApprovalStatus @default(DRAFT)
+  expiresOn      DateTime? @db.Date
+  createdAt      DateTime @default(now())
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType      LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, workDate, status])
+}

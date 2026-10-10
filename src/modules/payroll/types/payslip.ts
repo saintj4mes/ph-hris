@@ -1,0 +1,27 @@
+export type PayslipLine = { code: string; label: string; amount: string };
+export type SalarySlipRecord = {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  department: string;
+  periodStart: string;
+  periodEnd: string;
+  workingDays: string;
+  paidDays: string;
+  gross: string;
+  withholdingTax: string;
+  sss: string;
+  philHealth: string;
+  pagIbig: string;
+  netPay: string;
+  yearToDate: string;
+  taxableIncome: string;
+  nonTaxableEarnings?: string;
+  monthToDate?: string;
+  status: "Posted" | "Draft";
+  paymentDate?: string;
+  totalEmployerContributions?: string;
+  employerContributions?: PayslipLine[];
+  earnings: PayslipLine[];
+  deductions: PayslipLine[];
+};

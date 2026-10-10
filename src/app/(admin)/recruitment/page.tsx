@@ -1,0 +1,24 @@
+import { BriefcaseBusiness, UsersRound } from "lucide-react";
+import { JobOpeningForm } from "@/components/admin/job-opening-form";
+import { ApplicantPipelineActions } from "@/components/admin/applicant-pipeline-actions";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { prisma } from "@/shared/db/prisma";
+import { requirePermission } from "@/shared/platform/auth";
+import Link from "next/link";
+
+export const dynamic = "force-dynamic";
+
+export default async function RecruitmentPage() {
+  await requirePermission("recruitment", "read");
+  const [companies, openings, applicants] = await Promise.all([
+    prisma.company.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.jobOpening.findMany({ include: { applications: true }, orderBy: [{ status: "asc" }, { opensOn: "desc" }] }),
+    prisma.jobApplication.findMany({ include: { jobOpening: true, interviews: { orderBy: { scheduledAt: "desc" }, take: 1 } }, orderBy: { appliedAt: "desc" }, take: 30 }),
+  ]);
+  return <div className="space-y-7"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Talent acquisition</p><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-[30px]">Recruitment</h1><p className="mt-1 text-sm text-slate-500">Job demand, published openings, applicant stages, and interviews.</p></div><Link href="/careers" target="_blank" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700">Open public careers page</Link></div>{companies[0] && <JobOpeningForm companyId={companies[0].id} />}
+    <section className="grid gap-3 sm:grid-cols-2"><Metric icon={<BriefcaseBusiness />} label="Open jobs" value={String(openings.filter((item) => item.status === "OPEN").length)} /><Metric icon={<UsersRound />} label="Active applicants" value={String(applicants.filter((item) => !["HIRED", "REJECTED", "WITHDRAWN"].includes(item.status)).length)} /></section>
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-5"><h2 className="text-sm font-semibold">Job openings</h2></div><div className="divide-y divide-slate-100">{openings.map((opening) => <article key={opening.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><p className="text-sm font-semibold">{opening.title}</p><p className="mt-1 text-xs text-slate-500">{opening.location ?? "Location not set"} · {opening.employmentType.replaceAll("_", " ")} · {opening.applications.length} applicants</p></div><StatusBadge tone={opening.status === "OPEN" ? "success" : "neutral"}>{opening.status.replaceAll("_", " ")}</StatusBadge></article>)}{openings.length === 0 && <p className="p-6 text-sm text-slate-500">No job openings have been created.</p>}</div></section>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="border-b border-slate-100 p-5"><h2 className="text-sm font-semibold">Applicant pipeline</h2><p className="mt-1 text-xs text-slate-500">Manage stage changes, interviews, feedback, and offers.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Applicant</th><th className="px-4 py-3">Opening</th><th className="px-4 py-3">Source</th><th className="px-5 py-3">Stage</th><th className="px-5 py-3">Pipeline actions</th></tr></thead><tbody className="divide-y divide-slate-100">{applicants.map((applicant) => <tr key={applicant.id}><td className="px-5 py-4"><p className="font-semibold">{applicant.fullName}</p><p className="text-xs text-slate-500">{applicant.email}</p></td><td className="px-4 py-4 text-xs">{applicant.jobOpening.title}</td><td className="px-4 py-4 text-xs text-slate-500">{applicant.source ?? "—"}</td><td className="px-5 py-4"><StatusBadge>{applicant.status}</StatusBadge></td><td className="px-5 py-4"><ApplicantPipelineActions applicationId={applicant.id} status={applicant.status} interviewId={applicant.interviews[0]?.id} /></td></tr>)}</tbody></table>{applicants.length === 0 && <p className="p-6 text-sm text-slate-500">No applications received yet.</p>}</div></section>
+  </div>;
+}
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <article className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><div><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold">{value}</p></div><span className="grid size-9 place-items-center rounded-lg bg-teal-50 text-teal-700 [&>svg]:size-4">{icon}</span></article>; }

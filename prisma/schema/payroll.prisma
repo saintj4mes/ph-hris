@@ -1,0 +1,103 @@
+enum PayrollRunStatus {
+  DRAFT
+  CALCULATING
+  CALCULATED
+  APPROVED
+  SUBMITTED
+  PAID
+  CANCELLED
+  FAILED
+}
+
+enum SalarySlipStatus {
+  DRAFT
+  SUBMITTED
+  PAID
+  CANCELLED
+  AMENDED
+}
+
+enum SalarySlipDetailKind {
+  EARNING
+  DEDUCTION
+  EMPLOYER_CONTRIBUTION
+  EMPLOYER_TAX
+}
+
+model PayrollRun {
+  id             String           @id @default(cuid())
+  companyId      String
+  name           String
+  cutoffNumber   Int
+  periodStart    DateTime         @db.Date
+  periodEnd      DateTime         @db.Date
+  payDate        DateTime         @db.Date
+  status         PayrollRunStatus @default(DRAFT)
+  createdBy      String
+  approvedBy     String?
+  submittedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  salarySlips    SalarySlip[]
+  journalEntry   JournalEntry?
+
+  @@unique([companyId, name])
+  @@index([companyId, periodStart, periodEnd, status])
+}
+
+model SalarySlip {
+  id                    String             @id @default(cuid())
+  payrollRunId          String
+  employeeId            String
+  status                SalarySlipStatus   @default(DRAFT)
+  isFrozen              Boolean            @default(false)
+  revision              Int                @default(1)
+  amendedFromId         String?
+  currency              String             @default("PHP") @db.VarChar(3)
+  baseCompensation      Decimal            @default(0) @db.Decimal(18, 2)
+  overtimePay           Decimal            @default(0) @db.Decimal(18, 2)
+  nightDifferential     Decimal            @default(0) @db.Decimal(18, 2)
+  otherEarnings         Decimal            @default(0) @db.Decimal(18, 2)
+  grossPay              Decimal            @default(0) @db.Decimal(18, 2)
+  taxableIncome         Decimal            @default(0) @db.Decimal(18, 2)
+  taxWithheld           Decimal            @default(0) @db.Decimal(18, 2)
+  totalEmployeeDeductions Decimal          @default(0) @db.Decimal(18, 2)
+  totalEmployerContributions Decimal       @default(0) @db.Decimal(18, 2)
+  employerFringeBenefitTax Decimal         @default(0) @db.Decimal(18, 2)
+  netPay                Decimal            @default(0) @db.Decimal(18, 2)
+  calculationVersion    String
+  inputSnapshot         Json
+  submittedAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  payrollRun            PayrollRun         @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
+  employee              Employee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  amendedFrom           SalarySlip?        @relation("SalarySlipAmendments", fields: [amendedFromId], references: [id], onDelete: Restrict)
+  amendments            SalarySlip[]       @relation("SalarySlipAmendments")
+  details               SalarySlipDetail[]
+
+  @@unique([payrollRunId, employeeId, revision])
+  @@index([employeeId, createdAt])
+  @@index([payrollRunId, status, isFrozen])
+}
+
+model SalarySlipDetail {
+  id             String             @id @default(cuid())
+  salarySlipId   String
+  kind           SalarySlipDetailKind
+  code           String
+  label          String
+  quantity       Decimal?           @db.Decimal(18, 6)
+  rate           Decimal?           @db.Decimal(18, 6)
+  multiplier     Decimal?           @db.Decimal(9, 6)
+  amount         Decimal            @db.Decimal(18, 2)
+  taxable        Boolean            @default(false)
+  agency         StatutoryAgency?
+  sourceReference String?
+  metadata       Json?
+  salarySlip     SalarySlip         @relation(fields: [salarySlipId], references: [id], onDelete: Restrict)
+
+  @@index([salarySlipId, kind])
+  @@index([agency, code])
+}

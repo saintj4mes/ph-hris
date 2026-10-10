@@ -1,0 +1,163 @@
+enum ApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum IntegrationStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model AuthUser {
+  id             String         @id @default(cuid())
+  email          String         @unique
+  passwordHash   String
+  displayName    String
+  active         Boolean        @default(true)
+  lastLoginAt    DateTime?
+  employeeId     String?        @unique
+  employee       Employee?      @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  roles          UserRole[]
+  approvals      ApprovalAction[]
+  auditEvents    AuditEvent[]
+  notifications Notification[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  label       String
+  description String?
+  system      Boolean          @default(false)
+  users       UserRole[]
+  grants      RolePermission[]
+  createdAt   DateTime         @default(now())
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  resource    String
+  action      String
+  description String?
+  grants      RolePermission[]
+
+  @@unique([resource, action])
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  grantedBy  String?
+  grantedAt  DateTime @default(now())
+  user       AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model ApprovalRequest {
+  id             String           @id @default(cuid())
+  requestType    String
+  documentId     String
+  submittedById  String
+  currentStep    Int              @default(1)
+  status         ApprovalStatus   @default(PENDING)
+  submittedAt    DateTime         @default(now())
+  completedAt    DateTime?
+  actions        ApprovalAction[]
+
+  @@index([requestType, documentId, status])
+  @@index([submittedById, status])
+}
+
+model ApprovalAction {
+  id               String         @id @default(cuid())
+  approvalRequestId String
+  actorUserId      String
+  step             Int
+  action           String
+  comment          String?
+  createdAt        DateTime       @default(now())
+  request          ApprovalRequest @relation(fields: [approvalRequestId], references: [id], onDelete: Cascade)
+  actor            AuthUser       @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([approvalRequestId, step, createdAt])
+}
+
+model AuditEvent {
+  id          String    @id @default(cuid())
+  actorUserId String?
+  entityType  String
+  entityId    String
+  action      String
+  before      Json?
+  after       Json?
+  ipAddress   String?
+  occurredAt  DateTime  @default(now())
+  actor       AuthUser? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, occurredAt])
+  @@index([actorUserId, occurredAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  category    String
+  title       String
+  body        String
+  actionUrl   String?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  recipient   AuthUser @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+}
+
+model IntegrationConnection {
+  id          String   @id @default(cuid())
+  provider    String
+  name        String
+  active      Boolean  @default(false)
+  config      Json
+  secretRef   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  events      IntegrationEvent[]
+
+  @@unique([provider, name])
+}
+
+model IntegrationEvent {
+  id             String           @id @default(cuid())
+  connectionId   String?
+  eventType      String
+  idempotencyKey String?          @unique
+  status         IntegrationStatus @default(PENDING)
+  payload        Json
+  result          Json?
+  attempts        Int              @default(0)
+  lastError       String?
+  receivedAt      DateTime         @default(now())
+  processedAt     DateTime?
+  connection      IntegrationConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([status, receivedAt])
+}

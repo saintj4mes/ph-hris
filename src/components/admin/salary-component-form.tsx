@@ -1,0 +1,17 @@
+"use client";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { addSalaryStructureComponentAction } from "@/modules/core-hr/actions/compensation";
+
+type Structure = { id: string; code: string; name: string };
+export function SalaryComponentForm({ structures }: { structures: Structure[] }) {
+  const router = useRouter(); const [busy, startTransition] = useTransition(); const [error, setError] = useState<string | null>(null);
+  return <form action={(data) => { setError(null); startTransition(async () => { try { await addSalaryStructureComponentAction({ salaryStructureId: String(data.get("structureId")), code: String(data.get("code")), name: String(data.get("name")), kind: String(data.get("kind")) as "EARNING"|"DEDUCTION"|"EMPLOYER_CONTRIBUTION", amount: String(data.get("amount") || "") || undefined, formula: String(data.get("formula") || "") || undefined, taxable: data.get("taxable") === "on", compensationClass: String(data.get("class")) as "REGULAR"|"SUPPLEMENTARY", benefitExemptible: data.get("benefitExemptible") === "on" }); router.refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not add component."); } }); }} className="mt-3 grid gap-2 rounded-lg bg-slate-50 p-3 sm:grid-cols-2">
+    {structures.length > 1 && <label className="text-[11px] text-slate-600 sm:col-span-2">Structure<select name="structureId" className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs">{structures.map((s) => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}</select></label>}{structures.length === 1 && <input type="hidden" name="structureId" value={structures[0].id} />}
+    <input required name="code" placeholder="Component code" className="h-9 rounded-lg border border-slate-200 px-2 text-xs" /><input required name="name" placeholder="Component name" className="h-9 rounded-lg border border-slate-200 px-2 text-xs" />
+    <select name="kind" className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="EARNING">Earning</option><option value="DEDUCTION">Deduction</option><option value="EMPLOYER_CONTRIBUTION">Employer contribution</option></select><select name="class" className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs"><option value="REGULAR">Regular compensation</option><option value="SUPPLEMENTARY">Supplementary compensation</option></select>
+    <input name="amount" type="number" min="0" step="0.0001" placeholder="Fixed amount (or formula)" className="h-9 rounded-lg border border-slate-200 px-2 text-xs" /><input name="formula" placeholder="Formula (e.g. BASE * 0.1)" className="h-9 rounded-lg border border-slate-200 px-2 text-xs" />
+    <div className="flex flex-wrap gap-4 text-[11px] text-slate-600 sm:col-span-2"><label className="flex items-center gap-1.5"><input type="checkbox" name="taxable" className="accent-teal-700" />Taxable</label><label className="flex items-center gap-1.5"><input type="checkbox" name="benefitExemptible" className="accent-teal-700" />13th month / de minimis bucket</label></div>
+    {error && <p role="alert" className="text-xs text-rose-700 sm:col-span-2">{error}</p>}<button disabled={busy || !structures.length} className="h-9 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white disabled:opacity-50 sm:col-span-2">{busy ? "Saving…" : "Add payroll component"}</button>
+  </form>;
+}

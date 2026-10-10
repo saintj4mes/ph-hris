@@ -1,0 +1,311 @@
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  SEPARATED
+}
+
+enum EmploymentType {
+  REGULAR
+  PROBATIONARY
+  FIXED_TERM
+  CASUAL
+  PART_TIME
+}
+
+enum PayType {
+  MONTHLY
+  DAILY
+  HOURLY
+}
+
+enum WorkerClassification {
+  RANK_AND_FILE
+  MANAGERIAL
+  SUPERVISORY
+}
+
+enum AssetInventoryStatus {
+  AVAILABLE
+  ASSIGNED
+  MAINTENANCE
+  RETIRED
+}
+
+model Company {
+  id            String          @id @default(cuid())
+  name          String
+  legalName     String?
+  tin           String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  employees     Employee[]
+  departments   Department[]
+  designations  Designation[]
+  payrollPolicy PayrollPolicy?
+  payrollRuns   PayrollRun[]
+  leaveTypes    LeaveType[]
+  leavePeriods  LeavePeriod[]
+  leavePolicies LeavePolicy[]
+  holidayCalendars HolidayCalendar[]
+  salaryComponents SalaryComponent[]
+  salaryStructures SalaryStructure[]
+  journalAccounts JournalAccount[]
+  journalEntries JournalEntry[]
+  loanProducts LoanProduct[]
+  jobRequisitions JobRequisition[]
+  jobOpenings JobOpening[]
+  appraisalCycles AppraisalCycle[]
+  trainingPrograms TrainingProgram[]
+  expenseTypes ExpenseType[]
+  payrollPostingRules PayrollPostingRule[]
+  assetInventory AssetInventory[]
+
+  @@index([name])
+}
+
+model Department {
+  id        String     @id @default(cuid())
+  companyId String
+  name      String
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  employees Employee[]
+
+  @@unique([companyId, name])
+}
+
+model Designation {
+  id        String     @id @default(cuid())
+  companyId String
+  title     String
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  employees Employee[]
+
+  @@unique([companyId, title])
+}
+
+model Employee {
+  id                 String               @id @default(cuid())
+  employeeNumber     String
+  firstName          String
+  middleName         String?
+  lastName           String
+  suffix             String?
+  email              String?
+  status             EmployeeStatus       @default(ACTIVE)
+  employmentType     EmploymentType       @default(REGULAR)
+  workerClass        WorkerClassification @default(RANK_AND_FILE)
+  isMinimumWageEarner Boolean              @default(false)
+  dateHired          DateTime             @db.Date
+  dateSeparated      DateTime?            @db.Date
+  dateOfBirth        DateTime?            @db.Date
+  gender             String?
+  civilStatus        String?
+  mobilePhone        String?
+  personalEmail      String?
+  bloodGroup         String?
+  bankName           String?
+  bankAccountEncrypted String?
+  workLocation       String?
+  reportsToId        String?
+  tin                String?
+  sssNumber          String?
+  philHealthNumber   String?
+  pagIbigNumber      String?
+  companyId          String
+  departmentId       String?
+  designationId      String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  department         Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation        Designation?         @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  salaryAssignments  SalaryAssignment[]
+  statutoryEligibility StatutoryEligibility[]
+  allocationOverrides EmployeeContributionAllocationOverride[]
+  checkins           EmployeeCheckin[]
+  attendances        DailyAttendance[]
+  salarySlips        SalarySlip[]
+  authUser           AuthUser?
+  addresses          EmployeeAddress[]
+  emergencyContacts  EmergencyContact[]
+  identityDocuments  EmployeeIdentityDocument[]
+  employmentEvents   EmploymentEvent[]
+  employeeAssets     EmployeeAssetAssignment[]
+  onboardingRecords  EmployeeOnboarding[]
+  leaveApplications  LeaveApplication[]
+  leavePolicyAssignments EmployeeLeavePolicyAssignment[]
+  leaveAllocations   LeaveAllocation[]
+  leaveLedgerEntries LeaveLedgerEntry[]
+  leaveAdjustments   LeaveAdjustment[]
+  leaveEncashments   LeaveEncashment[]
+  compensatoryLeaveRequests CompensatoryLeaveRequest[]
+  shiftAssignments   ShiftAssignment[]
+  attendanceCorrections AttendanceCorrectionRequest[]
+  overtimeRequests  OvertimeRequest[]
+  jobApplications    JobApplication[]
+  appraisals         PerformanceAppraisal[]
+  performanceGoals   PerformanceGoal[]
+  trainingEnrollments TrainingEnrollment[]
+  expenseClaims      ExpenseClaim[]
+  employeeAdvances   EmployeeAdvance[]
+  employeeLoans      EmployeeLoan[]
+  travelRequests     TravelRequest[]
+  vehicleLogs        VehicleLog[]
+  shiftRequests      ShiftRequest[]
+  skills             EmployeeSkillRecord[]
+  grievances         EmployeeGrievance[]
+  feedbackReceived   EmployeeFeedbackEntry[] @relation("FeedbackReceiver")
+  feedbackGiven      EmployeeFeedbackEntry[] @relation("FeedbackAuthor")
+  fullAndFinal       FullAndFinalSettlement?
+  employeeBenefits   EmployeeBenefit[]
+  salaryStructureAssignments SalaryStructureAssignment[]
+  taxYearInputs      PayrollTaxYearInput[]
+  reportsTo          Employee? @relation("EmployeeManager", fields: [reportsToId], references: [id], onDelete: SetNull)
+  directReports      Employee[] @relation("EmployeeManager")
+
+  @@unique([companyId, employeeNumber])
+  @@index([companyId, status])
+  @@index([lastName, firstName])
+}
+
+model SalaryAssignment {
+  id             String   @id @default(cuid())
+  employeeId     String
+  companyId      String
+  payType        PayType
+  monthlyRate    Decimal? @db.Decimal(18, 4)
+  dailyRate      Decimal? @db.Decimal(18, 4)
+  hourlyRate     Decimal? @db.Decimal(18, 4)
+  effectiveFrom  DateTime @db.Date
+  effectiveTo    DateTime? @db.Date
+  currency       String   @default("PHP") @db.VarChar(3)
+  salaryStructureId String?
+  createdAt      DateTime @default(now())
+  createdBy      String?
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  salaryStructure SalaryStructure? @relation(fields: [salaryStructureId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, effectiveFrom])
+  @@index([employeeId, effectiveFrom, effectiveTo])
+}
+
+model EmployeeAddress {
+  id          String   @id @default(cuid())
+  employeeId  String
+  label       String   @default("HOME")
+  line1       String
+  line2       String?
+  barangay    String?
+  city        String
+  province    String
+  postalCode  String?
+  country     String   @default("PH")
+  isPrimary   Boolean  @default(false)
+  effectiveFrom DateTime @db.Date
+  effectiveTo DateTime? @db.Date
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, isPrimary])
+}
+
+model EmergencyContact {
+  id          String   @id @default(cuid())
+  employeeId  String
+  name        String
+  relationship String
+  phone       String
+  email       String?
+  isPrimary   Boolean  @default(false)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, isPrimary])
+}
+
+model EmployeeIdentityDocument {
+  id          String   @id @default(cuid())
+  employeeId  String
+  documentType String
+  documentNumberEncrypted String
+  issuingAuthority String?
+  issuedOn    DateTime? @db.Date
+  expiresOn   DateTime? @db.Date
+  verifiedAt  DateTime?
+  verifiedBy  String?
+  fileUrl     String?
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, documentType])
+}
+
+model EmploymentEvent {
+  id             String   @id @default(cuid())
+  employeeId     String
+  eventType      String
+  status         ApprovalStatus @default(PENDING)
+  effectiveDate  DateTime @db.Date
+  previousValue  Json?
+  newValue       Json?
+  reason         String
+  documentUrl    String?
+  approvedBy     String?
+  createdBy      String
+  createdAt      DateTime @default(now())
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, effectiveDate])
+  @@index([eventType, effectiveDate])
+}
+
+model EmployeeAssetAssignment {
+  id           String   @id @default(cuid())
+  employeeId   String
+  inventoryAssetId String?
+  assetTag     String
+  assetType    String
+  description  String
+  assignedAt   DateTime @default(now())
+  returnedAt   DateTime?
+  conditionOut String?
+  conditionIn  String?
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  inventoryAsset AssetInventory? @relation(fields: [inventoryAssetId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, returnedAt])
+  @@index([assetTag])
+}
+
+model AssetInventory {
+  id           String   @id @default(cuid())
+  companyId    String
+  assetTag     String
+  assetType    String
+  name         String
+  description  String?
+  serialNumber String?
+  condition    String?
+  status       AssetInventoryStatus @default(AVAILABLE)
+  acquiredAt   DateTime? @db.Date
+  purchaseCost Decimal? @db.Decimal(18, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  assignments  EmployeeAssetAssignment[]
+
+  @@unique([companyId, assetTag])
+  @@index([companyId, status, assetType])
+}
+
+model EmployeeOnboarding {
+  id            String   @id @default(cuid())
+  employeeId    String
+  title         String
+  dueDate       DateTime? @db.Date
+  completedAt   DateTime?
+  ownerUserId   String?
+  status        String   @default("OPEN")
+  notes         String?
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, status, dueDate])
+}

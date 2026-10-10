@@ -1,0 +1,114 @@
+enum ExpenseClaimStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+model ExpenseType {
+  id          String   @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  taxable     Boolean  @default(false)
+  active      Boolean  @default(true)
+  details     ExpenseClaimDetail[]
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, code])
+}
+
+model ExpenseClaim {
+  id             String   @id @default(cuid())
+  employeeId     String
+  claimDate      DateTime @db.Date
+  purpose        String
+  currency       String   @default("PHP") @db.VarChar(3)
+  totalAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  approvedAmount Decimal? @db.Decimal(18, 2)
+  status         ExpenseClaimStatus @default(DRAFT)
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  reviewerId     String?
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  details        ExpenseClaimDetail[]
+
+  @@index([employeeId, claimDate, status])
+  @@index([status, submittedAt])
+}
+
+model ExpenseClaimDetail {
+  id              String   @id @default(cuid())
+  expenseClaimId  String
+  expenseTypeId   String
+  expenseDate     DateTime @db.Date
+  description     String
+  amount          Decimal  @db.Decimal(18, 2)
+  receiptUrl      String?
+  taxAmount       Decimal  @default(0) @db.Decimal(18, 2)
+  claim           ExpenseClaim @relation(fields: [expenseClaimId], references: [id], onDelete: Cascade)
+  expenseType     ExpenseType @relation(fields: [expenseTypeId], references: [id], onDelete: Restrict)
+
+  @@index([expenseClaimId, expenseDate])
+}
+
+model EmployeeAdvance {
+  id             String   @id @default(cuid())
+  employeeId     String
+  requestedAmount Decimal @db.Decimal(18, 2)
+  approvedAmount Decimal? @db.Decimal(18, 2)
+  purpose        String
+  requestedOn    DateTime @default(now())
+  status         EmployeeAdvanceStatus @default(DRAFT)
+  settledAmount  Decimal  @default(0) @db.Decimal(18, 2)
+  releasedAt     DateTime?
+  salarySlipId   String?
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, status, requestedOn])
+}
+
+enum EmployeeAdvanceStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  RELEASED
+  SETTLED
+  CANCELLED
+}
+
+model TravelRequest {
+  id             String   @id @default(cuid())
+  employeeId     String
+  purpose        String
+  destination    String
+  departAt       DateTime
+  returnAt       DateTime
+  estimatedCost  Decimal? @db.Decimal(18, 2)
+  status         ApprovalStatus @default(DRAFT)
+  approvedCost   Decimal? @db.Decimal(18, 2)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, departAt, status])
+}
+
+model VehicleLog {
+  id             String   @id @default(cuid())
+  employeeId     String?
+  vehiclePlate   String
+  logDate        DateTime @db.Date
+  purpose        String
+  odometerStart  Decimal? @db.Decimal(12, 2)
+  odometerEnd    Decimal? @db.Decimal(12, 2)
+  fuelCost       Decimal? @db.Decimal(18, 2)
+  maintenanceCost Decimal? @db.Decimal(18, 2)
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([vehiclePlate, logDate])
+}

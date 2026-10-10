@@ -1,0 +1,168 @@
+enum CheckinLogType {
+  IN
+  OUT
+  UNKNOWN
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+  REST_DAY
+  HOLIDAY
+}
+
+model EmployeeCheckin {
+  id          String         @id @default(cuid())
+  employeeId  String
+  eventAt     DateTime
+  logType     CheckinLogType @default(UNKNOWN)
+  deviceId    String?
+  source      String         @default("BIOMETRIC")
+  externalId  String?
+  latitude    Decimal?       @db.Decimal(9, 6)
+  longitude   Decimal?       @db.Decimal(9, 6)
+  rawPayload  Json?
+  receivedAt  DateTime       @default(now())
+  employee    Employee       @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([source, externalId])
+  @@index([employeeId, eventAt])
+  @@index([deviceId, eventAt])
+}
+
+model ShiftSchedule {
+  id                String   @id @default(cuid())
+  companyId         String
+  name              String
+  startTime         String   @db.VarChar(5)
+  endTime           String   @db.VarChar(5)
+  scheduledHours    Decimal  @db.Decimal(6, 2)
+  breakMinutes      Int      @default(60)
+  graceMinutes      Int      @default(0)
+  nightWindowStart  String   @default("22:00") @db.VarChar(5)
+  nightWindowEnd    String   @default("06:00") @db.VarChar(5)
+  createdAt         DateTime @default(now())
+  assignments       ShiftAssignment[]
+  currentRequests   ShiftRequest[] @relation("CurrentShift")
+  requestedRequests ShiftRequest[] @relation("RequestedShift")
+
+  @@unique([companyId, name])
+}
+
+model ShiftAssignment {
+  id             String   @id @default(cuid())
+  employeeId     String
+  shiftScheduleId String
+  startsOn       DateTime @db.Date
+  endsOn         DateTime? @db.Date
+  status         ApprovalStatus @default(APPROVED)
+  assignedBy     String?
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  shiftSchedule  ShiftSchedule @relation(fields: [shiftScheduleId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, startsOn, endsOn])
+  @@index([shiftScheduleId, startsOn])
+}
+
+model ShiftRequest {
+  id                 String   @id @default(cuid())
+  employeeId         String
+  requestType        String
+  currentShiftId     String?
+  requestedShiftId   String?
+  effectiveDate      DateTime @db.Date
+  reason             String
+  status             ApprovalStatus @default(DRAFT)
+  reviewedBy         String?
+  reviewedAt         DateTime?
+  employee           Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  currentShift       ShiftSchedule? @relation("CurrentShift", fields: [currentShiftId], references: [id], onDelete: SetNull)
+  requestedShift     ShiftSchedule? @relation("RequestedShift", fields: [requestedShiftId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId, effectiveDate, status])
+}
+
+model AttendanceCorrectionRequest {
+  id                String   @id @default(cuid())
+  employeeId        String
+  workDate          DateTime @db.Date
+  requestedFirstIn  DateTime?
+  requestedLastOut  DateTime?
+  reason            String
+  status            ApprovalStatus @default(DRAFT)
+  submittedAt       DateTime?
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewComment     String?
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, workDate])
+  @@index([status, submittedAt])
+}
+
+model OvertimeRequest {
+  id              String   @id @default(cuid())
+  employeeId      String
+  workDate        DateTime @db.Date
+  dayType         String   @default("ORDINARY")
+  requestedHours  Decimal  @db.Decimal(8, 2)
+  approvedHours   Decimal? @db.Decimal(8, 2)
+  reason          String
+  status          ApprovalStatus @default(DRAFT)
+  submittedAt     DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, workDate])
+  @@index([status, workDate])
+}
+
+model HolidayCalendar {
+  id        String @id @default(cuid())
+  companyId String
+  name      String
+  active    Boolean @default(true)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  dates     HolidayDate[]
+
+  @@unique([companyId, name])
+}
+
+model HolidayDate {
+  id                String @id @default(cuid())
+  holidayCalendarId String
+  holidayDate       DateTime @db.Date
+  name              String
+  dayType           String
+  holidayCalendar   HolidayCalendar @relation(fields: [holidayCalendarId], references: [id], onDelete: Cascade)
+
+  @@unique([holidayCalendarId, holidayDate])
+}
+
+model DailyAttendance {
+  id                    String           @id @default(cuid())
+  employeeId            String
+  workDate              DateTime         @db.Date
+  status                AttendanceStatus @default(PRESENT)
+  firstIn               DateTime?
+  lastOut               DateTime?
+  scheduledMinutes      Int              @default(0)
+  workedMinutes         Int              @default(0)
+  lateMinutes           Int              @default(0)
+  undertimeMinutes      Int              @default(0)
+  overtimeMinutes       Int              @default(0)
+  nightShiftMinutes     Int              @default(0)
+  unpaidLeaveDays       Decimal          @default(0) @db.Decimal(8, 4)
+  restDay               Boolean          @default(false)
+  holidayType           String?
+  aggregationVersion    String           @default("v1")
+  employee              Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@unique([employeeId, workDate])
+  @@index([workDate, employeeId])
+}

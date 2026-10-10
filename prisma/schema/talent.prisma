@@ -1,0 +1,206 @@
+enum RecruitingStatus {
+  DRAFT
+  OPEN
+  ON_HOLD
+  CLOSED
+  CANCELLED
+}
+
+enum ApplicantStatus {
+  NEW
+  SCREENING
+  INTERVIEW
+  OFFER
+  HIRED
+  REJECTED
+  WITHDRAWN
+}
+
+model JobRequisition {
+  id             String   @id @default(cuid())
+  companyId      String
+  title          String
+  departmentId   String?
+  designationId  String?
+  headcount      Int      @default(1)
+  reason         String
+  requestedBy    String
+  status         RecruitingStatus @default(DRAFT)
+  approvedAt     DateTime?
+  createdAt      DateTime @default(now())
+  openings       JobOpening[]
+  company        Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, status, createdAt])
+}
+
+model JobOpening {
+  id                 String   @id @default(cuid())
+  requisitionId      String?
+  companyId          String
+  title              String
+  description        String
+  location           String?
+  employmentType     EmploymentType
+  salaryRangeMin     Decimal? @db.Decimal(18, 2)
+  salaryRangeMax     Decimal? @db.Decimal(18, 2)
+  opensOn            DateTime @db.Date
+  closesOn           DateTime? @db.Date
+  status             RecruitingStatus @default(OPEN)
+  requisition        JobRequisition? @relation(fields: [requisitionId], references: [id], onDelete: SetNull)
+  applications       JobApplication[]
+  company            Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, status, opensOn])
+}
+
+model JobApplication {
+  id            String   @id @default(cuid())
+  jobOpeningId  String
+  employeeId    String?
+  fullName      String
+  email         String
+  phone         String?
+  resumeUrl     String?
+  source        String?
+  status        ApplicantStatus @default(NEW)
+  appliedAt     DateTime @default(now())
+  jobOpening    JobOpening @relation(fields: [jobOpeningId], references: [id], onDelete: Restrict)
+  employee      Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  interviews    Interview[]
+  offer         JobOffer?
+
+  @@index([jobOpeningId, status, appliedAt])
+  @@index([email])
+}
+
+model Interview {
+  id              String   @id @default(cuid())
+  applicationId   String
+  scheduledAt     DateTime
+  interviewType   String
+  locationOrLink  String?
+  status          String   @default("SCHEDULED")
+  feedback        InterviewFeedback[]
+  application     JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, scheduledAt])
+}
+
+model InterviewFeedback {
+  id             String   @id @default(cuid())
+  interviewId    String
+  interviewerId  String
+  rating         Int?
+  recommendation String?
+  comments       String?
+  submittedAt    DateTime @default(now())
+  interview      Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+
+  @@unique([interviewId, interviewerId])
+}
+
+model JobOffer {
+  id                String   @id @default(cuid())
+  applicationId     String   @unique
+  proposedTitle     String
+  proposedSalary    Decimal  @db.Decimal(18, 2)
+  targetStartDate   DateTime @db.Date
+  terms             Json
+  status            String   @default("DRAFT")
+  sentAt            DateTime?
+  respondedAt       DateTime?
+  application       JobApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+}
+
+model AppraisalCycle {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  startsOn    DateTime @db.Date
+  endsOn      DateTime @db.Date
+  status      String   @default("DRAFT")
+  appraisals  PerformanceAppraisal[]
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, name])
+}
+
+model PerformanceGoal {
+  id             String   @id @default(cuid())
+  employeeId     String
+  cycleId        String?
+  title          String
+  description    String?
+  measure        String?
+  targetValue    Decimal? @db.Decimal(18, 4)
+  actualValue    Decimal? @db.Decimal(18, 4)
+  weight         Decimal  @default(1) @db.Decimal(8, 4)
+  dueDate        DateTime? @db.Date
+  status         String   @default("OPEN")
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, dueDate, status])
+}
+
+model PerformanceAppraisal {
+  id             String   @id @default(cuid())
+  employeeId     String
+  cycleId        String
+  managerId      String?
+  selfRating     Decimal? @db.Decimal(5, 2)
+  managerRating  Decimal? @db.Decimal(5, 2)
+  overallRating  Decimal? @db.Decimal(5, 2)
+  employeeNotes  String?
+  managerNotes   String?
+  status         String   @default("DRAFT")
+  submittedAt    DateTime?
+  finalizedAt    DateTime?
+  cycle          AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Restrict)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([cycleId, employeeId])
+}
+
+model TrainingProgram {
+  id          String   @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  events      TrainingEvent[]
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, code])
+}
+
+model TrainingEvent {
+  id             String   @id @default(cuid())
+  programId      String
+  startsAt       DateTime
+  endsAt         DateTime
+  venueOrLink    String?
+  instructor     String?
+  capacity       Int?
+  status         String   @default("PLANNED")
+  program        TrainingProgram @relation(fields: [programId], references: [id], onDelete: Restrict)
+  enrollments    TrainingEnrollment[]
+
+  @@index([programId, startsAt])
+}
+
+model TrainingEnrollment {
+  id            String   @id @default(cuid())
+  eventId       String
+  employeeId    String
+  status        String   @default("ENROLLED")
+  result        String?
+  score         Decimal? @db.Decimal(8, 2)
+  feedback      String?
+  completedAt   DateTime?
+  event         TrainingEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([eventId, employeeId])
+}

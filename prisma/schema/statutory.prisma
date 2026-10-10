@@ -1,0 +1,132 @@
+enum StatutoryAgency {
+  SSS
+  PHILHEALTH
+  PAGIBIG
+  BIR
+  LABOR
+}
+
+enum StatutoryRuleKind {
+  CONTRIBUTION
+  WITHHOLDING_TAX
+  FRINGE_BENEFIT_TAX
+}
+
+enum SchedulePublicationStatus {
+  PUBLISHED
+  PENDING_CONFIRMATION
+  SUPERSEDED
+}
+
+enum ContributionAllocationMode {
+  FIRST_CUTOFF
+  SECOND_CUTOFF
+  EVEN_SPLIT
+  EXACT_FIRST_CUTOFF_AMOUNT
+}
+
+model PayrollPolicy {
+  id                        String   @id @default(cuid())
+  companyId                 String   @unique
+  monthlyToDailyDivisor     Decimal  @default(26) @db.Decimal(8, 4)
+  scheduledHoursPerDay      Decimal  @default(8) @db.Decimal(6, 2)
+  firstCutoffStartDay       Int      @default(1)
+  firstCutoffEndDay         Int      @default(15)
+  secondCutoffStartDay      Int      @default(16)
+  secondCutoffEndDay        Int?     // null means end of month
+  dailyProrationBasis       String   @default("WORKING_DAYS")
+  company                   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contributionAllocations   ContributionAllocationPolicy[]
+}
+
+model StatutorySchedule {
+  id                 String                    @id @default(cuid())
+  agency             StatutoryAgency
+  ruleKind           StatutoryRuleKind
+  name               String
+  version            String
+  effectiveFrom      DateTime                  @db.Date
+  effectiveTo        DateTime?                 @db.Date
+  publicationStatus  SchedulePublicationStatus @default(PENDING_CONFIRMATION)
+  sourceUrl          String?
+  sourceReference    String?
+  verifiedAt         DateTime?
+  notes              String?
+  slabs              StatutorySlab[]
+  createdAt          DateTime                  @default(now())
+
+  @@unique([agency, ruleKind, version])
+  @@index([agency, ruleKind, effectiveFrom, effectiveTo])
+}
+
+model StatutorySlab {
+  id                     String           @id @default(cuid())
+  scheduleId             String
+  code                   String
+  payrollPeriod          String?          // e.g. SEMI_MONTHLY or MONTHLY
+  contributionProgram    String?          // e.g. SS, MPF/WISP, EC
+  compensationMin        Decimal?         @db.Decimal(18, 4)
+  compensationMax        Decimal?         @db.Decimal(18, 4)
+  contributionBaseFloor  Decimal?         @db.Decimal(18, 4)
+  contributionBaseCeiling Decimal?        @db.Decimal(18, 4)
+  employeeRate           Decimal?         @db.Decimal(9, 6)
+  employerRate           Decimal?         @db.Decimal(9, 6)
+  employeeFixedAmount    Decimal?         @db.Decimal(18, 4)
+  employerFixedAmount    Decimal?         @db.Decimal(18, 4)
+  taxBaseAmount          Decimal?         @db.Decimal(18, 4)
+  marginalRate           Decimal?         @db.Decimal(9, 6)
+  marginalOver           Decimal?         @db.Decimal(18, 4)
+  condition              String?
+  metadata               Json?
+  schedule               StatutorySchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, code, payrollPeriod])
+  @@index([scheduleId, compensationMin, compensationMax])
+}
+
+model StatutoryEligibility {
+  id             String          @id @default(cuid())
+  employeeId     String
+  agency         StatutoryAgency
+  ruleCode       String
+  eligible       Boolean
+  effectiveFrom  DateTime        @db.Date
+  effectiveTo    DateTime?       @db.Date
+  reason         String
+  createdBy      String
+  createdAt      DateTime        @default(now())
+  employee       Employee        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, agency, ruleCode, effectiveFrom, effectiveTo])
+}
+
+model ContributionAllocationPolicy {
+  id                    String                     @id @default(cuid())
+  payrollPolicyId       String
+  agency                StatutoryAgency
+  contributionProgram   String
+  mode                  ContributionAllocationMode
+  exactFirstCutoffAmount Decimal?                   @db.Decimal(18, 2)
+  effectiveFrom         DateTime                   @db.Date
+  effectiveTo           DateTime?                  @db.Date
+  payrollPolicy         PayrollPolicy              @relation(fields: [payrollPolicyId], references: [id], onDelete: Cascade)
+
+  @@unique([payrollPolicyId, agency, contributionProgram, effectiveFrom])
+}
+
+model EmployeeContributionAllocationOverride {
+  id                    String                     @id @default(cuid())
+  employeeId            String
+  agency                StatutoryAgency
+  contributionProgram   String
+  mode                  ContributionAllocationMode
+  exactFirstCutoffAmount Decimal?                   @db.Decimal(18, 2)
+  effectiveFrom         DateTime                   @db.Date
+  effectiveTo           DateTime?                  @db.Date
+  reason                String
+  createdBy             String
+  createdAt             DateTime                   @default(now())
+  employee              Employee                   @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, agency, contributionProgram, effectiveFrom])
+}

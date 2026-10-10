@@ -1,0 +1,11 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createTrainingEventAction } from "@/modules/performance/actions/cycles";
+import { Button } from "@/components/ui/button";
+
+export function TrainingEventForm({ programs }: { programs: Array<{ id: string; name: string }> }) {
+  const router = useRouter(); const [message, setMessage] = useState("");
+  return <details className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><summary className="cursor-pointer text-sm font-semibold">Schedule a training event</summary><form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={async (event) => { event.preventDefault(); const form = new FormData(event.currentTarget); try { await createTrainingEventAction({ programId: String(form.get("programId")), startsAt: String(form.get("startsAt")), endsAt: String(form.get("endsAt")), venueOrLink: String(form.get("venueOrLink") || ""), instructor: String(form.get("instructor") || ""), capacity: form.get("capacity") ? Number(form.get("capacity")) : undefined }); setMessage("Training event scheduled."); router.refresh(); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not schedule the training."); } }}><select name="programId" required className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">Select program</option>{programs.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}</select><input name="instructor" placeholder="Instructor" className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /><input name="startsAt" type="datetime-local" required className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /><input name="endsAt" type="datetime-local" required className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /><input name="venueOrLink" placeholder="Venue or video link" className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /><input name="capacity" type="number" min="1" placeholder="Capacity" className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /><div className="flex items-center gap-3 sm:col-span-2"><Button disabled={!programs.length}>Schedule event</Button>{message && <span role="status" className="text-xs text-slate-500">{message}</span>}</div></form></details>;
+}

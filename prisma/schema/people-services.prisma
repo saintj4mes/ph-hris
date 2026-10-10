@@ -1,0 +1,68 @@
+model EmployeeSkillRecord {
+  id          String   @id @default(cuid())
+  employeeId  String
+  skill       String
+  proficiency String?
+  assessedAt  DateTime? @db.Date
+  expiresAt   DateTime? @db.Date
+  notes       String?
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, skill])
+}
+
+model EmployeeGrievance {
+  id              String   @id @default(cuid())
+  employeeId      String
+  grievanceType   String
+  title           String
+  description     String
+  filedAt         DateTime @default(now())
+  status          String   @default("OPEN")
+  assignedTo      String?
+  resolution      String?
+  resolvedAt      DateTime?
+  confidential    Boolean  @default(true)
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, filedAt])
+  @@index([status, filedAt])
+}
+
+model EmployeeFeedbackEntry {
+  id             String   @id @default(cuid())
+  employeeId     String
+  authorEmployeeId String
+  category       String
+  rating         Int?
+  comments       String
+  private        Boolean @default(true)
+  createdAt      DateTime @default(now())
+  employee       Employee @relation("FeedbackReceiver", fields: [employeeId], references: [id], onDelete: Cascade)
+  author         Employee @relation("FeedbackAuthor", fields: [authorEmployeeId], references: [id], onDelete: Restrict)
+
+  @@index([employeeId, createdAt])
+  @@index([authorEmployeeId, createdAt])
+}
+
+model FullAndFinalSettlement {
+  id                   String   @id @default(cuid())
+  employeeId           String   @unique
+  separationDate       DateTime @db.Date
+  finalBasicPay         Decimal  @default(0) @db.Decimal(18, 2)
+  leaveEncashment       Decimal  @default(0) @db.Decimal(18, 2)
+  thirteenthMonthPay    Decimal  @default(0) @db.Decimal(18, 2)
+  otherEarnings         Decimal  @default(0) @db.Decimal(18, 2)
+  loanOutstanding       Decimal  @default(0) @db.Decimal(18, 2)
+  otherDeductions       Decimal  @default(0) @db.Decimal(18, 2)
+  grossSettlement       Decimal  @default(0) @db.Decimal(18, 2)
+  netSettlement         Decimal  @default(0) @db.Decimal(18, 2)
+  status                ApprovalStatus @default(DRAFT)
+  reviewedBy            String?
+  paidAt                DateTime?
+  createdAt             DateTime @default(now())
+  employee              Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  assetsChecklist       Json?
+
+  @@index([separationDate, status])
+}
